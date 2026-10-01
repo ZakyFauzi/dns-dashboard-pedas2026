@@ -132,4 +132,3 @@ Dashboard ini telah dioptimasi secara khusus agar **100% kompatibel dan ringan**
 ## 👥 Tim Peserta
 
 **Tim datascape** — Babak Final PeDaS 2026 (Pesta Data Nasional)  
-*Blind Review Compliant (No Institutional Identifiers)*
