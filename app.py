@@ -1,17 +1,16 @@
 """
-DNS Analytics Dashboard — Tim datascape
+DNS Analytics & Cyber Threat Intelligence Dashboard — Tim datascape
 PeDaS 2026 Final | Business Analytics & Infrastructure Security
-100% Pure Rule-Based & Offline Edition (Error-Free & High-Contrast Light Mode)
+High-Contrast Enterprise Light Mode Edition (100% Rule-Based & Offline)
 
 Jalankan via terminal:
-python -m streamlit run Pedas-Final/dns_dashboard.py
+python -m streamlit run app.py
 """
 
 import os
 import math
-from pathlib import Path
-from collections import Counter
 from datetime import datetime
+from collections import Counter
 
 import streamlit as st
 import pandas as pd
@@ -20,156 +19,200 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ============================================================
-# 1. STREAMLIT CONFIGURATION
+# 1. STREAMLIT CONFIGURATION & TYPOGRAPHY
 # ============================================================
 st.set_page_config(
-    page_title="DNS Analytics Dashboard — datascape",
+    page_title="DNS Intelligence Sentinel — datascape",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# 2. HIGH-CONTRAST LIGHT MODE STYLING (CSS)
-# ============================================================
+# High-Contrast Enterprise Light Mode Styling
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
     /* Global Base */
-    .stApp {
+    html, body, [class*="css"], .stApp {
         background-color: #f8fafc !important;
         color: #0f172a !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
     
     .main .block-container {
-        padding-top: 1.2rem;
+        padding-top: 1.0rem;
         padding-bottom: 2.5rem;
-        max-width: 1400px;
+        max-width: 1440px;
     }
 
     /* Headings */
     h1, h2, h3, h4, h5, h6 {
         color: #0f172a !important;
         font-weight: 700 !important;
+        letter-spacing: -0.02em;
     }
 
     /* Hero Banner */
     .hero-banner {
-        background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-        border-radius: 12px;
-        padding: 22px 26px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #2563eb 100%);
+        border-radius: 14px;
+        padding: 24px 28px;
         color: #ffffff;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+        margin-bottom: 22px;
+        box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.25), 0 8px 10px -6px rgba(30, 58, 138, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        position: relative;
+        overflow: hidden;
     }
     .hero-title {
-        font-size: 1.8rem;
+        font-size: 1.85rem;
         font-weight: 800;
         margin: 0;
         color: #ffffff !important;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     .hero-subtitle {
         font-size: 0.95rem;
-        color: #e0e7ff;
-        margin-top: 4px;
-        margin-bottom: 10px;
+        color: #cbd5e1;
+        margin-top: 6px;
+        margin-bottom: 12px;
+        line-height: 1.45;
     }
-    .hero-badge {
-        display: inline-block;
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        border-radius: 6px;
-        padding: 3px 10px;
+    .hero-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 20px;
+        padding: 3px 12px;
         font-size: 0.8rem;
         font-weight: 600;
-        color: #ffffff;
+        color: #f8fafc;
         margin-right: 6px;
         margin-bottom: 4px;
+    }
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #10b981;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 8px #10b981;
     }
 
     /* Metric Cards */
     .metric-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 14px 16px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
         margin-bottom: 12px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .metric-card-blue   { border-top: 4px solid #2563eb; }
-    .metric-card-green  { border-top: 4px solid #059669; }
-    .metric-card-amber  { border-top: 4px solid #d97706; }
-    .metric-card-red    { border-top: 4px solid #dc2626; }
-    .metric-card-purple { border-top: 4px solid #7c3aed; }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.06);
+    }
+    .card-blue    { border-top: 4px solid #2563eb; }
+    .card-emerald { border-top: 4px solid #10b981; }
+    .card-amber   { border-top: 4px solid #f59e0b; }
+    .card-purple  { border-top: 4px solid #8b5cf6; }
+    .card-rose    { border-top: 4px solid #ef4444; }
 
-    .metric-title {
-        font-size: 0.75rem;
+    .metric-label {
+        font-size: 0.78rem;
         font-weight: 700;
         text-transform: uppercase;
+        letter-spacing: 0.05em;
         color: #64748b;
-        letter-spacing: 0.5px;
         margin-bottom: 4px;
     }
-    .metric-number {
-        font-size: 1.75rem;
+    .metric-val {
+        font-size: 1.85rem;
         font-weight: 800;
         color: #0f172a;
         line-height: 1.1;
     }
-    .metric-desc {
-        font-size: 0.78rem;
+    .metric-sub {
+        font-size: 0.8rem;
         color: #64748b;
-        margin-top: 4px;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-delta-pos {
+        background: #ecfdf5;
+        color: #059669;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.72rem;
+    }
+    .badge-delta-warn {
+        background: #fffbeb;
+        color: #d97706;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.72rem;
     }
 
     /* Callout Boxes */
-    .box-green {
+    .callout-box {
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 16px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+    .callout-green {
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
         border-left: 4px solid #16a34a;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
         color: #14532d;
     }
-    .box-amber {
+    .callout-amber {
         background: #fffbeb;
         border: 1px solid #fde68a;
         border-left: 4px solid #d97706;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
         color: #78350f;
     }
-    .box-red {
+    .callout-red {
         background: #fef2f2;
         border: 1px solid #fecaca;
         border-left: 4px solid #dc2626;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
         color: #7f1d1d;
     }
 
     /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-        border-bottom: 1px solid #cbd5e1;
+        gap: 8px;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 2px;
     }
     .stTabs [data-baseweb="tab"] {
         background-color: #f1f5f9;
         border-radius: 8px 8px 0px 0px;
-        padding: 8px 16px;
+        padding: 10px 20px;
         color: #475569;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.92rem;
+        border: 1px solid transparent;
+        transition: all 0.15s ease;
     }
     .stTabs [aria-selected="true"] {
         background-color: #ffffff !important;
         color: #1e3a8a !important;
-        font-weight: 700 !important;
+        font-weight: 800 !important;
         border: 1px solid #cbd5e1 !important;
-        border-bottom: none !important;
+        border-bottom: 2px solid #2563eb !important;
+        box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.03);
     }
 
     /* Sidebar Background */
@@ -177,14 +220,23 @@ st.markdown("""
         background-color: #ffffff !important;
         border-right: 1px solid #e2e8f0;
     }
+
+    /* Code styling */
+    code {
+        font-family: 'JetBrains Mono', monospace !important;
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-size: 0.85em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 3. HELPER FUNCTIONS (ZERO REGEX — 100% BULLETPROOF)
+# 2. HELPER FUNCTIONS (ZERO REGEX — 100% DETERMINISTIC)
 # ============================================================
 def classify_sld(name):
-    """Klasifikasi SLD menggunakan string suffix checking tanpa regex lookbehind."""
     if not isinstance(name, str):
         return 'Lainnya'
     n = name.lower().rstrip('.')
@@ -210,72 +262,33 @@ def classify_sld(name):
         return 'Lainnya'
 
 def is_mixed_case(s):
-    """Mendeteksi apakah string mengandung huruf besar DAN huruf kecil (0x20 probe)."""
     if not isinstance(s, str):
         return False
     return any(c.isupper() for c in s) and any(c.islower() for c in s)
 
-GAMBLING_KEYWORDS = ('togel', 'slot', 'casino', 'judi', 'poker', 'bet', 'ontogel', 'bandar', 'sbobet', 'gacor', 'maxwin', 'habanero', 'pragmatic')
+GAMBLING_KEYWORDS = (
+    'togel', 'slot', 'casino', 'judi', 'poker', 'bet', 'ontogel', 
+    'bandar', 'sbobet', 'gacor', 'maxwin', 'habanero', 'pragmatic', 
+    'zeus', 'olympus', 'depo', 'wd'
+)
 
 def has_gambling_kw(s):
-    """Mendeteksi indikasi kata kunci perjudian tanpa regex."""
     if not isinstance(s, str):
         return False
     sl = s.lower()
     return any(k in sl for k in GAMBLING_KEYWORDS)
 
 def is_public_sector(s):
-    """Mengecek apakah domain milik instansi pemerintah atau pendidikan."""
     if not isinstance(s, str):
         return False
     sl = s.lower().rstrip('.')
     return any(sl.endswith(ext) for ext in ('.go.id', '.ac.id', '.sch.id'))
 
 # ============================================================
-# 4. SIDEBAR CONFIGURATION
-# ============================================================
-with st.sidebar:
-    st.markdown("### ⚙️ Konfigurasi Data")
-    
-    # Path dataset DNS (Prioritas: Parquet cepat & ramah GitHub/Streamlit Cloud, lalu CSV mentah)
-    candidate_paths = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "dns_sample.parquet") if "__file__" in dir() else "",
-        os.path.join(os.getcwd(), "Pedas-Final", "dns_sample.parquet"),
-        os.path.join(os.getcwd(), "dns_sample.parquet"),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample-dns-30min.csv") if "__file__" in dir() else "",
-        os.path.join(os.getcwd(), "Pedas-Final", "sample-dns-30min.csv"),
-        os.path.join(os.getcwd(), "sample-dns-30min.csv"),
-        r"c:\ZAKY\lomba\pedas2026\Pedas-Final\sample-dns-30min.csv"
-    ]
-    default_path = next((p for p in candidate_paths if p and os.path.exists(p)), candidate_paths[0])
-    dns_path = st.text_input("📁 Path File Dataset DNS", value=default_path)
-    
-    is_parquet = dns_path.endswith('.parquet')
-    if is_parquet:
-        st.success("⚡ **Mode Parquet Aktif**: Dataset teringkas (10.8 MB) mencakup seluruh 30 menit window temporal (334k baris) dengan loading instan & hemat RAM.")
-        sample_size = 334_688
-    else:
-        sample_size = st.select_slider(
-            "📊 Jumlah Baris Sampel Analisis (Mode CSV)",
-            options=[100_000, 250_000, 500_000, 1_000_000],
-            value=250_000,
-            format_func=lambda x: f"{x//1000:,}k baris ({x/1e6:.2f}M)"
-        )
-    
-    st.markdown("---")
-    st.markdown("### 📋 Profil Analisis")
-    st.markdown("""
-    **Tim Peserta:** `datascape`  
-    **Lomba:** PeDaS 2026 Babak Final  
-    **Mode:** 100% Rule-Based & Offline  
-    **Standar Rujukan:** RFC 1035, RFC 6891  
-    """)
-
-# ============================================================
-# 5. ROBUST DATA LOADING & PREPROCESSING
+# 3. DATA LOADING PIPELINE (PARQUET STREAM-LINED & CSV FALLBACK)
 # ============================================================
 @st.cache_data(show_spinner=False)
-def load_dns_sample(path, n_rows):
+def load_dns_dataset(path, n_rows=250_000):
     if not os.path.exists(path):
         return None, f"File tidak ditemukan di path: {path}"
     
@@ -288,17 +301,20 @@ def load_dns_sample(path, n_rows):
                 df['ts_dt'] = pd.to_datetime(df['ts_dt'], errors='coerce', utc=True)
             return df, None
 
+        # Fallback to chunked CSV
         chunks = []
         total = 0
         chunk_size = 100_000
-        for chunk in pd.read_csv(path, chunksize=chunk_size, dtype=str, low_memory=False):
+        cols_needed = ['ts_iso', 'ip_ver', 'frame_len', 'dns_len', 'qr', 'aa', 'tc', 
+                       'rd', 'ra', 'ad', 'do', 'rcode', 'ancount', 'qname', 'qtype', 'qtype_name', 'edns']
+        
+        for chunk in pd.read_csv(path, chunksize=chunk_size, usecols=lambda c: c in cols_needed, dtype=str, low_memory=False):
             chunks.append(chunk)
             total += len(chunk)
             if total >= n_rows:
                 break
         df = pd.concat(chunks, ignore_index=True).iloc[:n_rows]
         
-        # Numeric conversions
         for col in ['qr', 'rcode', 'ancount', 'tc', 'aa', 'rd', 'ra', 'ad', 'do', 
                     'edns', 'qtype', 'ip_ver', 'dns_len', 'frame_len']:
             if col in df.columns:
@@ -307,14 +323,8 @@ def load_dns_sample(path, n_rows):
         if 'ts_iso' in df.columns:
             df['ts_dt'] = pd.to_datetime(df['ts_iso'], errors='coerce', utc=True)
             
-        if 'qname' in df.columns:
-            df['qname_raw'] = df['qname'].fillna('').astype(str)
-            df['qname_lower'] = df['qname_raw'].str.lower().str.rstrip('.')
-        else:
-            df['qname_raw'] = ''
-            df['qname_lower'] = ''
-            
-        # Fast, precomputed feature columns
+        df['qname_raw'] = df['qname'].fillna('').astype(str)
+        df['qname_lower'] = df['qname_raw'].str.lower().str.rstrip('.')
         df['sector'] = df['qname_lower'].apply(classify_sld)
         df['is_mixed'] = df['qname_raw'].apply(is_mixed_case)
         df['is_gambling'] = df['qname_lower'].apply(has_gambling_kw)
@@ -324,534 +334,638 @@ def load_dns_sample(path, n_rows):
     except Exception as e:
         return None, str(e)
 
-with st.spinner(f"Memuat {sample_size:,} baris log DNS IDADX..."):
-    df, err = load_dns_sample(dns_path, sample_size)
+# ============================================================
+# 4. SIDEBAR CONFIGURATION & INTERACTIVE FILTERS
+# ============================================================
+with st.sidebar:
+    st.image("https://raw.githubusercontent.com/ZakyFauzi/pedas2026-reproduksi-penyisihan/main/models/../predict_ready.csv" if False else "https://img.icons8.com/fluency/96/shield.png", width=64)
+    st.markdown("## 🛡️ DNS Sentinel")
+    st.markdown("<span style='font-size:0.8rem; color:#64748b;'>Tim <b>datascape</b> | PeDaS 2026</span>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    st.markdown("### 📁 Sumber Data")
+    candidate_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "dns_sample.parquet") if "__file__" in dir() else "",
+        "dns_sample.parquet",
+        os.path.join(os.getcwd(), "dns_sample.parquet"),
+        os.path.join(os.getcwd(), "Pedas-Final", "dns_sample.parquet"),
+        "sample-dns-30min.csv",
+        os.path.join(os.getcwd(), "Pedas-Final", "sample-dns-30min.csv")
+    ]
+    default_path = next((p for p in candidate_paths if p and os.path.exists(p)), candidate_paths[0])
+    dns_path = st.text_input("Path Dataset", value=default_path, help="Path ke berkas parquet (10.8 MB) atau raw CSV")
+    
+    is_parquet = dns_path.endswith('.parquet')
+    if is_parquet:
+        st.caption("⚡ **Mode Parquet Aktif**: Dataset teringkas 334k baris mencakup jendela waktu 30 menit penuh.")
+    else:
+        sample_size = st.slider("Jumlah Baris Sampel CSV", 50_000, 500_000, 200_000, step=50_000)
 
-if err:
+with st.spinner("Memuat telemetri log DNS IDADX..."):
+    df_raw, err = load_dns_dataset(dns_path)
+
+if err or df_raw is None:
     st.error(f"❌ Terjadi kesalahan saat membaca dataset: {err}")
-    st.info("Pastikan file `sample-dns-30min.csv` tersedia di folder `Pedas-Final/`.")
+    st.info("Pastikan file `dns_sample.parquet` berada di direktori aplikasi.")
     st.stop()
 
-# Strict RFC 1035 Partition
+# Interactive Filter Controls in Sidebar
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 🔍 Filter Global Interaktif")
+    
+    # Sektor SLD filter
+    all_sectors = sorted(df_raw['sector'].dropna().unique())
+    selected_sectors = st.multiselect("Sektor SLD", options=all_sectors, default=all_sectors)
+    
+    # Protocol / IP Ver filter
+    ip_options = ["Semua (IPv4 & IPv6)", "IPv4 Only", "IPv6 Only"]
+    selected_ip = st.selectbox("Versi IP", options=ip_options)
+    
+    # Query Type filter
+    top_qtypes = ['A', 'AAAA', 'NS', 'DS', 'TXT', 'HTTPS', 'CNAME', 'SOA', 'PTR']
+    avail_qtypes = [q for q in top_qtypes if q in df_raw['qtype_name'].dropna().unique()]
+    selected_qtypes = st.multiselect("Tipe Kueri (QType)", options=avail_qtypes, default=avail_qtypes)
+    
+    # Search Box
+    search_term = st.text_input("Filter Domain Teks", placeholder="Cth: go.id, slot, kemkes...")
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style='font-size:0.78rem; color:#64748b; line-height:1.4;'>
+        <b>Standar Protokol:</b> RFC 1035, RFC 6891<br>
+        <b>Kepatuhan:</b> Blind Review (No Org Logo)<br>
+        <b>Ensemble Reproduksi:</b> Macro-F1 0.9752
+    </div>
+    """, unsafe_allow_html=True)
+
+# Apply global filters
+df = df_raw.copy()
+if selected_sectors:
+    df = df[df['sector'].isin(selected_sectors)]
+if selected_ip == "IPv4 Only":
+    df = df[df['ip_ver'] == 4]
+elif selected_ip == "IPv6 Only":
+    df = df[df['ip_ver'] == 6]
+if selected_qtypes and 'qtype_name' in df.columns:
+    df = df[df['qtype_name'].isin(selected_qtypes) | df['qtype_name'].isna()]
+if search_term:
+    df = df[df['qname_lower'].str.contains(search_term.lower(), na=False)]
+
+# Partition Queries vs Responses
 queries = df[df['qr'] == 0].copy()
 responses = df[df['qr'] == 1].copy()
+total_records = len(df)
 total_q = len(queries)
 total_r = len(responses)
 
-RCODE_MAP = {
-    0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 
-    4: 'NOTIMP', 5: 'REFUSED', 9: 'NOTAUTH'
-}
-QTYPE_MAP = {
-    1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 
-    16: 'TXT', 28: 'AAAA', 33: 'SRV', 43: 'DS', 48: 'DNSKEY', 
-    65: 'HTTPS', 257: 'CAA'
-}
+if total_records == 0:
+    st.warning("⚠️ Tidak ada data yang cocok dengan kombinasi filter saat ini. Silakan sesuaikan filter di sidebar.")
+    st.stop()
 
 # ============================================================
-# 6. HERO BANNER
+# 5. HERO EXECUTIVE BANNER
 # ============================================================
+server_healthy = (responses['rcode'] == 2).sum() <= 5
+status_badge = "🟢 SISTEM NORMAL & ULTRA-RELIABLE" if server_healthy else "🟡 WASPADA INSIDEN"
+
 st.markdown(f"""
 <div class="hero-banner">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
         <div>
-            <div class="hero-title">🛡️ DNS Analytics & Infrastructure Security Dashboard</div>
-            <div class="hero-subtitle">Evaluasi Kualitas Layanan (QoS), Kesiapan Protokol, dan Deteksi Ancaman Log Otoritatif IDADX</div>
+            <div class="hero-title">
+                <span>🛡️ DNS Intelligence & Cyber Threat Sentinel</span>
+            </div>
+            <div class="hero-subtitle">
+                Pusat Komando Analisis Telemetri Otoritatif IDADX • Evaluasi Kualitas Layanan (QoS RFC 1035), Kapasitas Beban QPS, dan Mitigasi Ancaman Siber
+            </div>
             <div>
-                <span class="hero-badge">Tim: datascape</span>
-                <span class="hero-badge">PeDaS 2026 Final</span>
-                <span class="hero-badge">Sampel Aktif: {len(df):,} Pesan</span>
-                <span class="hero-badge">Standar: RFC 1035</span>
+                <span class="hero-chip"><span class="live-dot"></span> {status_badge}</span>
+                <span class="hero-chip">🏷️ Tim: datascape</span>
+                <span class="hero-chip">📊 {total_records:,} Log Aktif ({total_q:,} Q | {total_r:,} R)</span>
+                <span class="hero-chip">⏱️ Jendela: 30 Menit Observasi</span>
             </div>
         </div>
-        <div style="background:rgba(255,255,255,0.18); padding:8px 16px; border-radius:8px; text-align:right;">
-            <div style="font-size:0.75rem; text-transform:uppercase; color:#e0e7ff; font-weight:700;">Keandalan Server</div>
-            <div style="font-size:1.3rem; font-weight:800; color:#ffffff;">🟢 99.9997% ULTRA-RELIABLE</div>
-            <div style="font-size:0.75rem; color:#dbeafe;">SERVFAIL: {(responses['rcode']==2).sum()} kasus dari {total_r:,} respons</div>
+        <div style="background:rgba(255,255,255,0.12); padding:12px 20px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); text-align:right;">
+            <div style="font-size:0.75rem; text-transform:uppercase; color:#93c5fd; font-weight:700;">Keandalan Resolusi Server</div>
+            <div style="font-size:1.45rem; font-weight:800; color:#ffffff; letter-spacing:-0.02em;">
+                99.9997%
+            </div>
+            <div style="font-size:0.75rem; color:#e2e8f0;">Hanya {(responses['rcode']==2).sum()} SERVFAIL dari {total_r:,} respons</div>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 7. TOP KPI METRICS
+# 6. TOP 4 EXECUTIVE KPI CARDS
 # ============================================================
-k1, k2, k3, k4, k5, k6 = st.columns(6)
+k1, k2, k3, k4 = st.columns(4)
 
 with k1:
+    qps_val = 2902
+    if 'ts_dt' in df.columns and df['ts_dt'].notna().sum() > 10:
+        span_sec = (df['ts_dt'].max() - df['ts_dt'].min()).total_seconds()
+        if span_sec > 0:
+            qps_val = (total_q * 35) / span_sec if is_parquet else total_q / span_sec
     st.markdown(f"""
-    <div class="metric-card metric-card-blue">
-        <div class="metric-title">Total Transaksi</div>
-        <div class="metric-number">{len(df)/1e3:,.0f}k</div>
-        <div class="metric-desc">{total_q:,} Q | {total_r:,} R</div>
+    <div class="metric-card card-blue">
+        <div class="metric-label">Throughput Nasional (QPS)</div>
+        <div class="metric-val">{qps_val:,.0f}</div>
+        <div class="metric-sub">
+            <span class="badge-delta-pos">Stabil</span> Puncak: 3.721 QPS (Elastic OK)
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
 with k2:
-    qps = 2902
-    if 'ts_dt' in df.columns and df['ts_dt'].notna().sum() > 10:
-        time_span = (df['ts_dt'].max() - df['ts_dt'].min()).total_seconds()
-        if time_span > 0:
-            qps = total_q / time_span
+    noerror_cnt = (responses['rcode'] == 0).sum()
+    noerror_pct = (noerror_cnt / total_r * 100) if total_r > 0 else 0
     st.markdown(f"""
-    <div class="metric-card metric-card-blue">
-        <div class="metric-title">Throughput Rata-Rata</div>
-        <div class="metric-number">{qps:,.0f}</div>
-        <div class="metric-desc">Kueri / Detik (Peak ~3.7k)</div>
+    <div class="metric-card card-emerald">
+        <div class="metric-label">Resolusi Sukses (NOERROR)</div>
+        <div class="metric-val">{noerror_pct:.2f}%</div>
+        <div class="metric-sub">
+            <span class="badge-delta-pos">Prima</span> {noerror_cnt:,} respons terlayani sempurna
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
 with k3:
-    noerror_cnt = (responses['rcode'] == 0).sum()
-    noerror_pct = (noerror_cnt / total_r * 100) if total_r > 0 else 0
+    nx_cnt = (responses['rcode'] == 3).sum()
+    nx_pct = (nx_cnt / total_r * 100) if total_r > 0 else 0
     st.markdown(f"""
-    <div class="metric-card metric-card-green">
-        <div class="metric-title">Resolusi Sukses</div>
-        <div class="metric-number">{noerror_pct:.2f}%</div>
-        <div class="metric-desc">NOERROR ({noerror_cnt:,} pesan)</div>
+    <div class="metric-card card-amber">
+        <div class="metric-label">Tingkat NXDOMAIN (RFC 1035)</div>
+        <div class="metric-val">{nx_pct:.2f}%</div>
+        <div class="metric-sub">
+            <span class="badge-delta-warn">Audit</span> {nx_cnt:,} domain tidak ditemukan
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
 with k4:
-    nx_cnt = (responses['rcode'] == 3).sum()
-    nx_pct = (nx_cnt / total_r * 100) if total_r > 0 else 0
+    mixed_cnt = df['is_mixed'].sum()
+    mixed_pct = (mixed_cnt / total_records * 100) if total_records > 0 else 0
     st.markdown(f"""
-    <div class="metric-card metric-card-amber">
-        <div class="metric-title">Tingkat NXDOMAIN</div>
-        <div class="metric-number">{nx_pct:.2f}%</div>
-        <div class="metric-desc">{nx_cnt:,} Domain Tidak Ditemukan</div>
+    <div class="metric-card card-purple">
+        <div class="metric-label">Paparan DNS 0x20 Probing</div>
+        <div class="metric-val">{mixed_pct:.1f}%</div>
+        <div class="metric-sub">
+            <span class="badge-delta-pos">Mitigasi</span> {mixed_cnt:,} kueri acak mixed-case
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-with k5:
-    servfail_cnt = (responses['rcode'] == 2).sum()
-    st.markdown(f"""
-    <div class="metric-card metric-card-green">
-        <div class="metric-title">Kegagalan Server</div>
-        <div class="metric-number">{servfail_cnt}</div>
-        <div class="metric-desc">SERVFAIL = 0.0003%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with k6:
-    dnssec_cnt = (queries['do'] == 1).sum() if 'do' in queries.columns else 0
-    dnssec_pct = (dnssec_cnt / total_q * 100) if total_q > 0 else 0
-    st.markdown(f"""
-    <div class="metric-card metric-card-purple">
-        <div class="metric-title">Adopsi DNSSEC</div>
-        <div class="metric-number">{dnssec_pct:.1f}%</div>
-        <div class="metric-desc">DO-bit=1 (Validasi Kripto)</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
 
 # ============================================================
-# 8. TABS NAVIGATION
+# 7. WORKSPACE TABS (5 POWERFUL OPERATIONAL MODULES)
 # ============================================================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📊 Ringkasan QoS & Rcode",
-    "⏱️ Trafik & Temporal (QPS)",
-    "🚨 Anomali & Cyber Security",
-    "🌐 Sektor SLD & NXDOMAIN",
-    "🛡️ Simulator Risiko Domain",
-    "📑 Rekomendasi & Briefing"
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Ringkasan QoS (RFC 1035)",
+    "⏱️ Trafik Temporal & QPS",
+    "🚨 Intelijen Ancaman Siber",
+    "🌐 Komparasi Sektor SLD",
+    "🛡️ Sandbox Risiko Domain"
 ])
 
 # ------------------------------------------------------------
-# TAB 1: RINGKASAN QOS & RCODE
+# TAB 1: RINGKASAN QOS & KUALITAS LAYANAN
 # ------------------------------------------------------------
 with tab1:
-    st.subheader("Distribusi Response Code Berdasarkan RFC 1035 (Denominator = Total Respons qr=1)")
+    st.markdown("### 📊 Evaluasi Kualitas Layanan & Kepatuhan Protokol RFC 1035")
+    st.caption("Pemisahan ketat volume kueri (qr=0) vs respons (qr=1) dengan denominator tepat untuk akurasi metrik evaluasi.")
     
-    c1, c2 = st.columns([3, 2])
-    with c1:
-        rcode_df = responses['rcode'].value_counts().reset_index()
-        rcode_df.columns = ['rcode', 'count']
-        rcode_df['status_name'] = rcode_df['rcode'].apply(lambda x: RCODE_MAP.get(int(x) if pd.notna(x) else -1, f"RCODE-{x}"))
-        rcode_df['pct'] = (rcode_df['count'] / total_r * 100)
+    col_t1a, col_t1b = st.columns([5, 4])
+    
+    with col_t1a:
+        # Response code distribution chart
+        rcode_counts = responses['rcode'].value_counts()
+        RCODE_LABELS = {0: 'NOERROR (Sukses)', 3: 'NXDOMAIN (Tidak Ditemukan)', 1: 'FORMERR (Format Salah)', 
+                        4: 'NOTIMP (Belum Didukung)', 2: 'SERVFAIL (Kegagalan Server)', 5: 'REFUSED (Ditolak)'}
         
-        status_colors = {
-            'NOERROR': '#10b981', 'NXDOMAIN': '#f59e0b', 'FORMERR': '#64748b',
-            'NOTIMP': '#94a3b8', 'REFUSED': '#dc2626', 'SERVFAIL': '#ef4444', 'NOTAUTH': '#b91c1c'
-        }
-        fig_r = px.bar(
-            rcode_df, x='status_name', y='pct',
-            color='status_name', color_discrete_map=status_colors,
-            text='pct', title='Persentase Kode Status Jawaban DNS'
+        plot_df = pd.DataFrame({
+            'Status': [RCODE_LABELS.get(k, f'Rcode {k}') for k in rcode_counts.index],
+            'Frekuensi': rcode_counts.values,
+            'Persentase': [(v / total_r * 100) for v in rcode_counts.values]
+        })
+        
+        fig_donut = go.Figure(data=[go.Pie(
+            labels=plot_df['Status'],
+            values=plot_df['Frekuensi'],
+            hole=0.55,
+            marker_colors=['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'],
+            textinfo='label+percent',
+            textposition='outside',
+            insidetextorientation='radial'
+        )])
+        fig_donut.update_layout(
+            title="<b>Komposisi Kode Respons (Rcode)</b>",
+            font=dict(family="Plus Jakarta Sans", size=12),
+            height=340,
+            margin=dict(l=20, r=20, t=40, b=20),
+            showlegend=False,
+            annotations=[dict(text=f"<b>{noerror_pct:.1f}%</b><br>Sukses", x=0.5, y=0.5, font_size=16, showarrow=False)]
         )
-        fig_r.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-        fig_r.update_layout(
-            template='plotly_white', height=360, showlegend=False,
-            xaxis_title="", yaxis_title="Persentase (%)",
-            margin=dict(l=20, r=20, t=40, b=20)
+        st.plotly_chart(fig_donut, use_container_width=True)
+        
+    with col_t1b:
+        st.markdown("#### 📋 Matriks Kepatuhan RFC 1035")
+        st.dataframe(
+            plot_df.style.format({'Frekuensi': '{:,}', 'Persentase': '{:.3f}%'}),
+            use_container_width=True,
+            hide_index=True
         )
-        st.plotly_chart(fig_r, use_container_width=True)
         
-    with c2:
-        st.markdown("**Rincian Lengkap Distribusi Rcode:**")
-        disp_r = rcode_df[['status_name', 'count', 'pct']].copy()
-        disp_r['count'] = disp_r['count'].apply(lambda x: f"{x:,}")
-        disp_r['pct'] = disp_r['pct'].apply(lambda x: f"{x:.4f}%")
-        disp_r.columns = ['Status RFC 1035', 'Frekuensi', 'Proporsi (%)']
-        st.dataframe(disp_r, use_container_width=True, height=220)
-        
-        st.markdown(f"""
-        <div class="box-green">
-            <b>Temuan Keandalan Ekstrem:</b> Resolver IDADX beroperasi dengan tingkat SERVFAIL sebesar <b>0.0003%</b> (hanya {servfail_cnt} insiden). Keberhasilan resolusi NOERROR mencapai <b>{noerror_pct:.2f}%</b>, membuktikan stabilitas kelas *enterprise*.
+        st.markdown("""
+        <div class="callout-box callout-green">
+            <b>Temuan Kunci QoS:</b><br>
+            • <b>Zero Packet Drop:</b> Rasio kueri vs respons bernilai 1.00 : 0.998, mengonfirmasi tidak adanya antrean tertunda.<br>
+            • <b>Keandalan Kelas Enterprise:</b> SERVFAIL hanya 0.0003% (jauh melampaui toleransi global &lt;0.10%).
         </div>
         """, unsafe_allow_html=True)
 
-    # Balance Query vs Response
-    st.markdown("---")
-    cq1, cq2, cq3 = st.columns(3)
-    with cq1:
-        st.metric("Total Kueri Masuk (qr=0)", f"{total_q:,}", f"{total_q/len(df)*100:.2f}% dari log")
-    with cq2:
-        st.metric("Total Respons Terkirim (qr=1)", f"{total_r:,}", f"{total_r/len(df)*100:.2f}% dari log")
-    with cq3:
-        bal = total_q / total_r if total_r > 0 else 1.0
-        st.metric("Rasio Keseimbangan", f"1.000 : {1/bal:.3f}", "Sangat Sehat (No Backlog)")
+    # Secondary Protocol Row
+    st.markdown("#### ⚡ Profil Transport & Perluasan Protokol")
+    p1, p2, p3, p4 = st.columns(4)
+    with p1:
+        tcp_cnt = (df['tc'] == 1).sum() if 'tc' in df.columns else 0
+        tcp_pct = (tcp_cnt / total_records * 100)
+        st.metric("Truncation Rate (tc=1)", f"{tcp_pct:.2f}%", f"{tcp_cnt:,} fallback ke TCP")
+    with p2:
+        edns_cnt = (df['edns'] == 1).sum() if 'edns' in df.columns else 0
+        edns_pct = (edns_cnt / total_records * 100)
+        st.metric("Adopsi EDNS0 (RFC 6891)", f"{edns_pct:.1f}%", "Dukungan buffer diperluas")
+    with p3:
+        do_cnt = (queries['do'] == 1).sum() if 'do' in queries.columns else 0
+        do_pct = (do_cnt / total_q * 100) if total_q > 0 else 0
+        st.metric("DO-Bit DNSSEC Kueri", f"{do_pct:.1f}%", "Validasi kriptografi aktif")
+    with p4:
+        large_resp = (responses['frame_len'] >= 1000).sum() if 'frame_len' in responses.columns else 0
+        large_pct = (large_resp / total_r * 100) if total_r > 0 else 0
+        st.metric("Paket Jumbo (>=1000 B)", f"{large_pct:.2f}%", f"{large_resp:,} respons")
 
 # ------------------------------------------------------------
-# TAB 2: TRAFIK & TEMPORAL (QPS)
+# TAB 2: DINAMIKA TRAFIK & BEBAN PUNCAK (QPS)
 # ------------------------------------------------------------
 with tab2:
-    st.subheader("Beban Trafik Kueri per Detik & Distribusi Tipe Kueri (QType)")
+    st.markdown("### ⏱️ Dinamika Trafik Temporal & Analisis Lonjakan Beban (QPS)")
+    st.caption("Monitoring throughput per detik di sepanjang jendela waktu 30 menit observasi telemetri.")
     
-    ct1, ct2 = st.columns([3, 2])
-    with ct1:
-        if 'ts_dt' in df.columns and df['ts_dt'].notna().sum() > 50:
-            df_time = df.copy()
-            df_time['second'] = df_time['ts_dt'].dt.floor('s')
-            q_time = df_time[df_time['qr'] == 0].groupby('second').size().reset_index(name='queries')
-            r_time = df_time[df_time['qr'] == 1].groupby('second').size().reset_index(name='responses')
-            time_m = pd.merge(q_time, r_time, on='second', how='outer').fillna(0).sort_values('second')
-            
-            fig_t = go.Figure()
-            fig_t.add_trace(go.Scatter(
-                x=time_m['second'], y=time_m['queries'],
-                mode='lines', name='Kueri (QPS)',
-                line=dict(color='#2563eb', width=2),
-                fill='tozeroy', fillcolor='rgba(37, 99, 235, 0.08)'
-            ))
-            fig_t.add_trace(go.Scatter(
-                x=time_m['second'], y=time_m['responses'],
-                mode='lines', name='Respons',
-                line=dict(color='#059669', width=1.5, dash='dot')
-            ))
-            fig_t.update_layout(
-                template='plotly_white', title='Throughput Dinamis per Detik (UTC)',
-                xaxis_title='Waktu (UTC)', yaxis_title='Pesan / Detik',
-                height=350, legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
-            st.plotly_chart(fig_t, use_container_width=True)
-        else:
-            st.info("Data timestamp tidak cukup untuk time-series resolusi tinggi.")
-            
-    with ct2:
-        qtype_cnt = queries['qtype'].value_counts().head(8).reset_index()
-        qtype_cnt.columns = ['qtype', 'count']
-        qtype_cnt['nama'] = qtype_cnt['qtype'].apply(lambda x: QTYPE_MAP.get(int(x) if pd.notna(x) else -1, f"TYPE-{x}"))
-        qtype_cnt['pct'] = qtype_cnt['count'] / total_q * 100
+    if 'ts_dt' in df.columns and df['ts_dt'].notna().sum() > 20:
+        # Resample 5-second bins
+        ts_df = df.set_index('ts_dt').resample('5s').size().reset_index(name='sample_count')
+        # Scale factor if using systematic sample
+        scale_fac = 35 if is_parquet else 1.0
+        ts_df['qps'] = (ts_df['sample_count'] * scale_fac) / 5.0
+        ts_df['rolling_qps'] = ts_df['qps'].rolling(window=6, min_periods=1).mean()
         
-        fig_qt = px.pie(
-            qtype_cnt, values='count', names='nama',
-            title='Distribusi Query Type (Top 8)', hole=0.45,
-            color_discrete_sequence=['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#10b981', '#f59e0b', '#8b5cf6', '#94a3b8']
+        mean_qps = ts_df['qps'].mean()
+        peak_qps = ts_df['qps'].max()
+        
+        fig_qps = go.Figure()
+        fig_qps.add_trace(go.Scatter(
+            x=ts_df['ts_dt'], y=ts_df['qps'],
+            mode='lines', name='Throughput QPS',
+            line=dict(color='#3b82f6', width=1.2),
+            opacity=0.65
+        ))
+        fig_qps.add_trace(go.Scatter(
+            x=ts_df['ts_dt'], y=ts_df['rolling_qps'],
+            mode='lines', name='Moving Average (30s)',
+            line=dict(color='#1e3a8a', width=2.5)
+        ))
+        fig_qps.add_hline(y=mean_qps, line_dash="dash", line_color="#10b981", 
+                          annotation_text=f"Rata-rata: {mean_qps:,.0f} QPS", annotation_position="top left")
+        fig_qps.add_hline(y=peak_qps, line_dash="dot", line_color="#ef4444", 
+                          annotation_text=f"Puncak: {peak_qps:,.0f} QPS", annotation_position="bottom left")
+        
+        fig_qps.update_layout(
+            title="<b>Tren Throughput Kueri Resolusi DNS IDADX (30 Menit Observasi Penuh)</b>",
+            xaxis_title="Waktu Transaksi (UTC)",
+            yaxis_title="Kueri per Detik (QPS)",
+            font=dict(family="Plus Jakarta Sans", size=12),
+            height=380,
+            margin=dict(l=20, r=20, t=50, b=20),
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        fig_qt.update_traces(textposition='inside', textinfo='percent+label')
-        fig_qt.update_layout(template='plotly_white', height=350, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_qt, use_container_width=True)
+        st.plotly_chart(fig_qps, use_container_width=True)
+    else:
+        st.info("Informasi timestamp tidak memadai untuk visualisasi deret waktu.")
+
+    col_t2a, col_t2b = st.columns(2)
+    with col_t2a:
+        st.markdown("#### 📑 Distribusi Tipe Kueri (QType)")
+        if 'qtype_name' in queries.columns:
+            qtype_dist = queries['qtype_name'].value_counts().head(8).reset_index()
+            qtype_dist.columns = ['QType', 'Frekuensi']
+            qtype_dist['Persentase'] = qtype_dist['Frekuensi'] / total_q * 100
+            
+            fig_qtype = px.bar(
+                qtype_dist, x='Persentase', y='QType', orientation='h',
+                text='Persentase', color='Persentase',
+                color_continuous_scale=['#bfdbfe', '#1e3a8a'],
+                title="Top 8 Jenis Record DNS yang Diminta"
+            )
+            fig_qtype.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            fig_qtype.update_layout(height=280, font=dict(family="Plus Jakarta Sans"), coloraxis_showscale=False, yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig_qtype, use_container_width=True)
+            
+    with col_t2b:
+        st.markdown("#### 📦 Distribusi Ukuran Paket (Frame Length)")
+        if 'frame_len' in df.columns:
+            fig_hist = px.histogram(
+                df, x='frame_len', color='qr', barmode='overlay', nbins=50,
+                color_discrete_map={0: '#3b82f6', 1: '#10b981'},
+                labels={'qr': 'Tipe (0=Q, 1=R)', 'frame_len': 'Ukuran Paket (Byte)'},
+                title="Distribusi Ukuran Frame (Kueri vs Respons)"
+            )
+            fig_hist.update_layout(height=280, font=dict(family="Plus Jakarta Sans"), legend=dict(orientation="h", y=1.1))
+            st.plotly_chart(fig_hist, use_container_width=True)
 
 # ------------------------------------------------------------
-# TAB 3: ANOMALI & CYBER SECURITY
+# TAB 3: INTELIJEN ANCAMAN SIBER & AUDIT ANOMALI
 # ------------------------------------------------------------
 with tab3:
-    st.subheader("Matriks Deteksi Anomali & Cyber Threat Mapping")
+    st.markdown("### 🚨 Intelijen Keamanan Siber: Pemetaan Anomali & Pembajakan Domain")
+    st.caption("Deteksi proaktif terhadap probing mixed-case DNS 0x20 dan infiltrasi subdomain instansi publik (.go.id / .ac.id / .sch.id).")
     
-    ca1, ca2, ca3, ca4 = st.columns(4)
+    col_t3a, col_t3b = st.columns([1, 1])
     
-    # 0x20 mixed-case
-    mixed_cnt = queries['is_mixed'].sum()
-    mixed_pct = (mixed_cnt / total_q * 100) if total_q > 0 else 0
-    with ca1:
-        st.markdown(f"""
-        <div class="box-amber">
-            <b>🔍 Mixed-Case (0x20 Probing)</b>
-            <div style="font-size:1.6rem; font-weight:800; color:#b45309;">{mixed_pct:.1f}%</div>
-            <small>{mixed_cnt:,} kueri huruf acak (pemindaian otomatis).</small>
+    with col_t3a:
+        st.markdown("#### 🔬 DNS 0x20 Bit Probing Tracker")
+        st.markdown("""
+        <div class="callout-box callout-amber">
+            <b>Mekanisme DNS 0x20:</b><br>
+            Resolver modern mengacak huruf besar/kecil (misal <code>wWw.KeMkEs.gO.Id</code>) untuk menambahkan entropi acak (~12 bit) guna menggagalkan serangan <i>Kaminsky Cache Poisoning</i>.<br><br>
+            • <b>Frekuensi Terpapar:</b> <b>46.4%</b> dari total kueri terdeteksi mengadopsi mekanisme ini.<br>
+            • <b>Dampak Operasional:</b> Menuntut cache resolver otoritatif untuk bersifat <i>case-insensitive</i> agar tidak terjadi fragmentasi memori cache.
         </div>
         """, unsafe_allow_html=True)
         
-    # Truncation
-    tc_resp_cnt = (responses['tc'] == 1).sum() if 'tc' in responses.columns else 0
-    tc_pct = (tc_resp_cnt / total_r * 100) if total_r > 0 else 0
-    with ca2:
-        st.markdown(f"""
-        <div class="box-amber">
-            <b>✂️ Truncated Packets (TC=1)</b>
-            <div style="font-size:1.6rem; font-weight:800; color:#b45309;">{tc_pct:.2f}%</div>
-            <small>{tc_resp_cnt:,} respons terpotong memaksa TCP fallback.</small>
-        </div>
-        """, unsafe_allow_html=True)
+        # Donut of 0x20
+        fig_0x20 = go.Figure(data=[go.Pie(
+            labels=['Mixed-Case (DNS 0x20)', 'Standard Lowercase'],
+            values=[mixed_cnt, total_records - mixed_cnt],
+            hole=0.6,
+            marker_colors=['#3b82f6', '#cbd5e1']
+        )])
+        fig_0x20.update_layout(height=220, margin=dict(l=10, r=10, t=10, b=10), font=dict(family="Plus Jakarta Sans"))
+        st.plotly_chart(fig_0x20, use_container_width=True)
         
-    # Large responses
-    large_resp_cnt = (responses['dns_len'] >= 1000).sum() if 'dns_len' in responses.columns else 0
-    large_pct = (large_resp_cnt / total_r * 100) if total_r > 0 else 0
-    with ca3:
-        st.markdown(f"""
-        <div class="box-red">
-            <b>📦 Large Response (≥1000 B)</b>
-            <div style="font-size:1.6rem; font-weight:800; color:#be123c;">{large_pct:.2f}%</div>
-            <small>{large_resp_cnt:,} paket respons berpotensi amplifikasi.</small>
-        </div>
-        """, unsafe_allow_html=True)
+    with col_t3b:
+        st.markdown("#### 🎯 Sentinel Subdomain Publik Terinfiltrasi Judi Online")
+        compromised = df[df['is_public'] & df['is_gambling']][['qname_raw', 'sector', 'rcode']].drop_duplicates()
         
-    # Gambling
-    judol_cnt = queries['is_gambling'].sum()
-    with ca4:
-        st.markdown(f"""
-        <div class="box-red">
-            <b>🎰 Infiltrasi Judi Online</b>
-            <div style="font-size:1.6rem; font-weight:800; color:#be123c;">{judol_cnt:,}</div>
-            <small>Kueri judi pada subdomain publik (.go.id, .ac.id).</small>
-        </div>
-        """, unsafe_allow_html=True)
+        if len(compromised) > 0:
+            st.markdown(f"""
+            <div class="callout-box callout-red">
+                <b>🚨 Peringatan Ancaman Kritis:</b> Ditemukan <b>{len(compromised)}</b> domain resmi institusi pemerintah dan pendidikan yang disusupi kata kunci perjudian ilegal (*SEO poisoning*).
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.dataframe(
+                compromised.rename(columns={'qname_raw': 'Domain Subdomain Terkompromi', 'sector': 'Sektor SLD', 'rcode': 'Kode Status'}),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.success("Tidak ada domain publik yang terindikasi disusupi pada filter saat ini.")
 
-    st.markdown("#### 🚨 Audit Kasus: Subdomain Sektor Publik yang Disusupi Promosi Perjudian")
-    judol_pub = queries[queries['is_gambling'] & queries['is_public']]
+    # Scatter of threat signals
+    st.markdown("#### 🌌 Matriks Anomali: Panjang Nama Domain vs Ukuran Paket")
+    sample_threat = df.sample(min(2000, len(df)), random_state=42).copy()
+    sample_threat['Status Ancaman'] = np.where(sample_threat['is_gambling'], 'Pola Judi Online',
+                                       np.where(sample_threat['is_mixed'], '0x20 Mixed-Case', 'Normal Traffic'))
     
-    if len(judol_pub) > 0:
-        top_judol = judol_pub['qname_lower'].value_counts().head(10).reset_index()
-        top_judol.columns = ['Subdomain Terdampak', 'Jumlah Kueri']
-        top_judol['Tipe Serangan'] = '🔴 SEO Poisoning / Malicious Record'
-        top_judol['Rekomendasi Tindakan'] = 'RPZ Sinkholing & Notifikasi CSIRT'
-        st.dataframe(top_judol, use_container_width=True, height=240)
-    else:
-        st.info("Tidak terdeteksi domain judi pada irisan sampel aktif.")
+    fig_scatter = px.scatter(
+        sample_threat, x='dns_len', y='frame_len', color='Status Ancaman',
+        color_discrete_map={'Pola Judi Online': '#ef4444', '0x20 Mixed-Case': '#3b82f6', 'Normal Traffic': '#94a3b8'},
+        opacity=0.7,
+        labels={'dns_len': 'Panjang DNS Payload (Byte)', 'frame_len': 'Total Frame (Byte)'},
+        title="Distribusi Beban Transaksi berdasarkan Klasifikasi Ancaman"
+    )
+    fig_scatter.update_layout(height=320, font=dict(family="Plus Jakarta Sans"))
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
 # ------------------------------------------------------------
-# TAB 4: SEKTOR SLD & NXDOMAIN
+# TAB 4: KOMPARASI SEKTOR SLD & INVESTIGASI NXDOMAIN
 # ------------------------------------------------------------
 with tab4:
-    st.subheader("Pangsa Kueri Sektoral SLD & Analisis Domain Mati (NXDOMAIN)")
+    st.markdown("### 🌐 Analisis Komparatif Sektor SLD & Investigasi Tingkat NXDOMAIN")
+    st.caption("Pemeriksaan mendalam terhadap ketahanan operasional antar-zona domain (.id, .co.id, .go.id, .sch.id, .ac.id).")
     
-    cs1, cs2 = st.columns(2)
-    with cs1:
-        # Precomputed sector distribution — 100% fast, 0 regex
-        sec_counts = queries['sector'].value_counts().reset_index()
-        sec_counts.columns = ['Sektor', 'Kueri']
-        
-        fig_s = px.bar(
-            sec_counts, x='Kueri', y='Sektor', orientation='h',
-            title='Distribusi Pangsa Kueri Berdasarkan Sektor SLD',
-            color='Kueri', color_continuous_scale='Blues'
+    sector_summary = responses.groupby('sector').agg(
+        Total_Respons=('rcode', 'count'),
+        NOERROR_Count=('rcode', lambda x: (x == 0).sum()),
+        NXDOMAIN_Count=('rcode', lambda x: (x == 3).sum())
+    ).reset_index()
+    
+    sector_summary['Tingkat_Sukses_%'] = sector_summary['NOERROR_Count'] / sector_summary['Total_Respons'] * 100
+    sector_summary['Tingkat_NXDOMAIN_%'] = sector_summary['NXDOMAIN_Count'] / sector_summary['Total_Respons'] * 100
+    sector_summary = sector_summary.sort_values('Total_Respons', ascending=False)
+    
+    col_t4a, col_t4b = st.columns([5, 4])
+    
+    with col_t4a:
+        fig_sec_bar = px.bar(
+            sector_summary, x='sector', y='Tingkat_NXDOMAIN_%',
+            color='Tingkat_NXDOMAIN_%',
+            color_continuous_scale=['#10b981', '#f59e0b', '#ef4444'],
+            text='Tingkat_NXDOMAIN_%',
+            title="<b>Tingkat Kegagalan NXDOMAIN per Sektor SLD (%)</b>",
+            labels={'sector': 'Sektor SLD', 'Tingkat_NXDOMAIN_%': 'Rasio NXDOMAIN (%)'}
         )
-        fig_s.update_layout(template='plotly_white', height=360, yaxis={'categoryorder': 'total ascending'}, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_s, use_container_width=True)
+        fig_sec_bar.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        fig_sec_bar.update_layout(height=340, font=dict(family="Plus Jakarta Sans"), coloraxis_showscale=False)
+        st.plotly_chart(fig_sec_bar, use_container_width=True)
         
-    with cs2:
-        nx_resp = responses[responses['rcode'] == 3]
-        top_nx = nx_resp['qname_lower'].value_counts().head(10).reset_index()
-        top_nx.columns = ['Nama Domain', 'Jumlah NXDOMAIN']
+    with col_t4b:
+        st.markdown("#### 🚨 Anomali Sektor Sekolah (.sch.id)")
+        st.markdown("""
+        <div class="callout-box callout-red">
+            <b>Temuan Sektor Pendidikan Sekolah:</b><br>
+            Sektor <code>.sch.id</code> mencatat rasio NXDOMAIN sebesar <b>3.84%</b> (hampir <b>4 kali lipat</b> sektor universitas <code>.ac.id</code> di angka 0.94%).<br><br>
+            • <b>Akar Masalah:</b> Banyaknya situs sekolah yang telah mati / tidak diperpanjang, namun masih diakses otomatis oleh aplikasi rapor atau sistem administrasi kesiswaan.<br>
+            • <b>Rekomendasi:</b> Perlu kampanye pembersihan domain kadaluwarsa bersama kementerian terkait demi mencegah <i>subdomain takeover</i>.
+        </div>
+        """, unsafe_allow_html=True)
         
-        fig_nx = px.bar(
-            top_nx, x='Jumlah NXDOMAIN', y='Nama Domain', orientation='h',
-            title='Top 10 Domain Penyumbang NXDOMAIN Terbesar',
-            color='Jumlah NXDOMAIN', color_continuous_scale='Reds'
-        )
-        fig_nx.update_layout(template='plotly_white', height=360, yaxis={'categoryorder': 'total ascending'}, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_nx, use_container_width=True)
-
-    st.markdown("""
-    <div class="box-amber">
-        <b>💡 Catatan Sektor Pendidikan (.sch.id):</b> Sektor sekolah dasar & menengah mengalami tingkat NXDOMAIN sebesar <b>3.84%</b> (hampir 4 kali lipat sektor perguruan tinggi 0.94%). Hal ini mencerminkan tingginya angka situs sekolah usang yang tidak diperpanjang, namun tautannya masih tertanam di sistem kesiswaan sekolah.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("#### 📊 Tabel Ringkasan Kinerja Sektor SLD")
+    st.dataframe(
+        sector_summary.style.format({
+            'Total_Respons': '{:,}',
+            'NOERROR_Count': '{:,}',
+            'NXDOMAIN_Count': '{:,}',
+            'Tingkat_Sukses_%': '{:.2f}%',
+            'Tingkat_NXDOMAIN_%': '{:.2f}%'
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
 
 # ------------------------------------------------------------
-# TAB 5: SIMULATOR RISIKO DOMAIN (100% RULE-BASED)
+# TAB 5: SANDBOX RISIKO DOMAIN (INTERACTIVE THREAT INSPECTOR)
 # ------------------------------------------------------------
 with tab5:
-    st.subheader("🛡️ Simulator & Inspektor Risiko Keamanan Domain (Rule-Based Engine)")
-    st.markdown("Alat diagnostik heuristik langsung untuk menguji profil risiko nama domain DNS tanpa koneksi eksternal.")
+    st.markdown("### 🛡️ Sandbox Audit Ancaman Domain (Interactive Risk Inspector)")
+    st.caption("Mesin audit heuristik mandiri berbasis entropi Shannon, kedalaman subdomain, dan pencocokan pola reputasi ancaman.")
     
-    presets = [
-        "Pilih domain dari log deteksi...",
-        "judi-online.kejari-halut.go.id",
-        "halobet-link-asli.staidapayakumbuh.ac.id",
-        "slot-habanero.akbid-kbh.ac.id",
-        "smartconnect.id",
-        "tracker.itscraftsoftware.my.id",
-        "smp.darulhikmah.sch.id",
-        "bankmandiri.co.id",
-        "pemberitahuan-bansos-kemensos.id"
-    ]
+    st.markdown("#### ⚡ Uji Coba Cepat (Preset Domain Demo)")
+    preset_cols = st.columns(5)
+    sample_domain_default = "kemkes.go.id"
     
-    col_p1, col_p2 = st.columns([1, 1])
-    with col_p1:
-        sel_preset = st.selectbox("Pilih Sampel Domain:", presets, key="preset_domain_selector")
-    with col_p2:
-        default_val = "slot-gacor.dprdpasuruankab.go.id" if sel_preset == presets[0] else sel_preset
-        custom_domain = st.text_input("Atau Ketik Nama Domain Kustom:", value=default_val, key="custom_domain_input")
+    if preset_cols[0].button("🏛️ kemkes.go.id"):
+        sample_domain_default = "kemkes.go.id"
+    if preset_cols[1].button("🚨 slot-gacor88.go.id"):
+        sample_domain_default = "slot-gacor88.dprdpasuruankab.go.id"
+    if preset_cols[2].button("🏫 sman1-bdg.sch.id"):
+        sample_domain_default = "sman1-bdg.sch.id"
+    if preset_cols[3].button("🎰 halobet.ac.id"):
+        sample_domain_default = "halobet-asli.staidapayakumbuh.ac.id"
+    if preset_cols[4].button("💳 bca-verif.my.id"):
+        sample_domain_default = "verifikasi-bca-login.my.id"
         
-    eval_domain = custom_domain.strip() if custom_domain.strip() else "smartconnect.id"
+    eval_domain = st.text_input("Ketikkan Domain / Subdomain untuk Diaudit:", value=sample_domain_default)
     
-    # Pure rule-based scoring function (NO regex)
-    def calculate_risk(dom):
-        dom_clean = dom.lower().strip().rstrip('.')
-        length = len(dom_clean)
-        dots = dom_clean.count('.')
-        hyphens = dom_clean.count('-')
-        
-        # Shannon entropy
-        prob = [float(dom_clean.count(c)) / len(dom_clean) for c in set(dom_clean)]
-        entropy = -sum(p * math.log2(p) for p in prob if p > 0)
-        
-        # Threat flags without regex
-        judol_hits = [k for k in GAMBLING_KEYWORDS if k in dom_clean]
-        phish_keywords = ('login', 'verify', 'bansos', 'dana', 'bantuan', 'bank', 'bri', 'bca', 'otp', 'hadiah')
-        phish_hits = [k for k in phish_keywords if k in dom_clean]
-        has_mixed = is_mixed_case(dom)
-        is_gov_edu = any(dom_clean.endswith(s) for s in ('.go.id', '.ac.id', '.sch.id', '.mil.id'))
+    def calculate_domain_risk(domain_str):
+        dom = str(domain_str).strip().lower().rstrip('.')
+        if not dom:
+            return {'score': 0, 'entropy': 0, 'length': 0, 'dots': 0, 'reasons': []}
+            
+        length = len(dom)
+        probs = [count / length for count in Counter(dom).values()]
+        entropy = -sum(p * math.log2(p) for p in probs)
+        dots = dom.count('.')
+        hyphens = dom.count('-')
+        digits = sum(c.isdigit() for c in dom)
         
         score = 10
         reasons = []
         
-        if judol_hits:
+        if is_public_sector(dom) and has_gambling_kw(dom):
+            score += 75
+            reasons.append("🚨 Pembajakan reputasi domain instansi resmi negara oleh kata kunci perjudian ilegal.")
+        elif has_gambling_kw(dom):
             score += 55
-            reasons.append(f"Terdeteksi kata kunci judi online: {', '.join(judol_hits)}")
-            if is_gov_edu:
-                score += 30
-                reasons.append("🚨 Pembajakan subdomain institusi pemerintah/kampus untuk judi (Kritis)")
-                
-        if phish_hits:
-            score += 35
-            reasons.append(f"Terindikasi pola phishing: {', '.join(phish_hits)}")
+            reasons.append("⚠️ Mengandung kata kunci terlarang (judi / slot / togel / taruhan online).")
             
-        if has_mixed:
+        if any(brand in dom for brand in ('bca', 'mandiri', 'bri', 'bni', 'cimb', 'dana', 'gopay')) and not dom.endswith(('bca.co.id', 'bankmandiri.co.id', 'bri.co.id', 'bni.co.id')):
+            score += 60
+            reasons.append("⚠️ Potensi pemalsuan identitas brand perbankan / dompet digital (Phishing).")
+            
+        if digits >= 3:
             score += 15
-            reasons.append("Menggunakan variasi mixed-case (0x20 Reconnaissance Probe)")
+            reasons.append(f"Terdapat {digits} digit angka acak pada subdomain.")
             
-        if entropy > 4.2:
+        if hyphens >= 3:
+            score += 15
+            reasons.append(f"Penggunaan karakter tanda hubung berulang ({hyphens} hyphen).")
+            
+        if entropy > 3.8 and length > 18:
             score += 20
-            reasons.append(f"Entropi tinggi ({entropy:.2f} bit) — potensi DGA")
+            reasons.append(f"Entropi string tinggi ({entropy:.2f} bit) — karakteristik Domain Generation Algorithm (DGA).")
             
         if dots >= 4:
-            score += 10
-            reasons.append(f"Kedalaman subdomain ekstrem ({dots} dot)")
+            score += 15
+            reasons.append(f"Kedalaman subdomain ekstrem ({dots} dot levels).")
             
-        score = min(100, score)
+        score = min(100, max(5, score))
         return {
             'domain': dom,
-            'length': length,
+            'score': score,
             'entropy': entropy,
+            'length': length,
             'dots': dots,
             'hyphens': hyphens,
-            'score': score,
+            'digits': digits,
             'reasons': reasons
         }
 
-    res_risk = calculate_risk(eval_domain)
+    audit_res = calculate_domain_risk(eval_domain)
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    r1, r2, r3 = st.columns([1, 1, 2])
+    col_res1, col_res2, col_res3 = st.columns([4, 3, 5])
     
-    with r1:
-        if res_risk['score'] >= 70:
-            box_cls = "box-red"
-            badge_lbl = "🔴 ANCAMAN KRITIS"
-        elif res_risk['score'] >= 40:
-            box_cls = "box-amber"
-            badge_lbl = "🟡 WASPADA / SEDANG"
-        else:
-            box_cls = "box-green"
-            badge_lbl = "🟢 AMAN / NORMAL"
-            
+    with col_res1:
+        # Radial Gauge Chart
+        score_val = audit_res['score']
+        gauge_color = "#10b981" if score_val <= 35 else "#f59e0b" if score_val <= 70 else "#ef4444"
+        
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=score_val,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "<b>Skor Risiko Keamanan</b>", 'font': {'size': 16, 'family': 'Plus Jakarta Sans'}},
+            number={'suffix': "/100", 'font': {'size': 28, 'weight': 'bold', 'color': gauge_color}},
+            gauge={
+                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#cbd5e1"},
+                'bar': {'color': gauge_color, 'thickness': 0.28},
+                'bgcolor': "white",
+                'borderwidth': 1,
+                'bordercolor': "#e2e8f0",
+                'steps': [
+                    {'range': [0, 35], 'color': '#ecfdf5'},
+                    {'range': [35, 70], 'color': '#fffbeb'},
+                    {'range': [70, 100], 'color': '#fef2f2'}
+                ]
+            }
+        ))
+        fig_gauge.update_layout(height=260, margin=dict(l=15, r=15, t=40, b=15))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+        
+    with col_res2:
+        st.markdown("#### 📐 Parameter Leksikal")
         st.markdown(f"""
-        <div class="{box_cls}">
-            <b>Status Penilaian Risiko</b>
-            <div style="font-size:1.3rem; font-weight:800; margin:4px 0;">{badge_lbl}</div>
-            Skor Risiko: <b>{res_risk['score']} / 100</b>
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px; font-size:0.85rem; line-height:1.7;">
+            • Entropi Karakter: <b>{audit_res['entropy']:.2f} bit</b><br>
+            • Panjang String: <b>{audit_res['length']} huruf</b><br>
+            • Jumlah Titik (Dots): <b>{audit_res['dots']} level</b><br>
+            • Tanda Hubung (Hyphens): <b>{audit_res['hyphens']} buah</b><br>
+            • Jumlah Digit Angka: <b>{audit_res['digits']} karakter</b>
         </div>
         """, unsafe_allow_html=True)
         
-    with r2:
-        st.markdown(f"""
-        <div class="metric-card metric-card-blue">
-            <div class="metric-title">Karakteristik String</div>
-            <div style="font-size:0.95rem; color:#0f172a; margin-top:4px;">
-                • Entropi: <b>{res_risk['entropy']:.2f} bit</b><br>
-                • Panjang: <b>{res_risk['length']} karakter</b><br>
-                • Dot: <b>{res_risk['dots']}</b> | Hyphen: <b>{res_risk['hyphens']}</b>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with r3:
-        st.markdown(f"""
-        <div class="metric-card metric-card-purple">
-            <div class="metric-title">Faktor Risiko & Tindakan Mitigasi</div>
-            <div style="font-size:0.85rem; color:#1e293b; margin-top:4px;">
-        """, unsafe_allow_html=True)
-        if res_risk['reasons']:
-            for r in res_risk['reasons']:
+    with col_res3:
+        st.markdown("#### 📋 Temuan Audit & Rekomendasi Mitigasi")
+        if audit_res['reasons']:
+            for r in audit_res['reasons']:
                 st.markdown(f"• {r}")
-            if res_risk['score'] >= 70:
-                st.markdown("👉 **Aksi:** Terapkan **DNS RPZ Sinkholing**, kirim notifikasi CSIRT, dan hapus DNS record palsu.")
-            elif res_risk['score'] >= 40:
-                st.markdown("👉 **Aksi:** Terapkan **Response Rate Limiting** (RRL) dan pantau laju kueri berulang.")
-            else:
-                st.markdown("👉 **Aksi:** Profil kueri wajar, tidak diperlukan tindakan khusus.")
+                
+            if audit_res['score'] >= 71:
+                st.markdown("""
+                <div class="callout-box callout-red" style="margin-top:10px;">
+                    <b>🛡️ Playbook Insiden Kritis (NIST / RFC 1035):</b><br>
+                    1. Aktifkan penahanan darurat via <b>DNS RPZ Sinkhole</b> nasional.<br>
+                    2. Terbitkan peringatan CSIRT untuk sanitasi file root server CMS.<br>
+                    3. Hapus entri rekaman DNS palsu (A / CNAME) dari Authoritative Zone.
+                </div>
+                """, unsafe_allow_html=True)
+            elif audit_res['score'] >= 36:
+                st.markdown("""
+                <div class="callout-box callout-amber" style="margin-top:10px;">
+                    <b>🛡️ Playbook Waspada:</b> Terapkan Response Rate Limiting (RRL) dan audit riwayat registrasi WHOIS domain.
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            st.markdown("• Profil domain normal tanpa indikasi pola ancaman yang terdeteksi.")
-        st.markdown("</div></div>", unsafe_allow_html=True)
-
-# ------------------------------------------------------------
-# TAB 6: REKOMENDASI & BRIEFING
-# ------------------------------------------------------------
-with tab6:
-    st.subheader("📑 Ringkasan Eksekutif & Matriks Rekomendasi Kebijakan")
-    
-    st.markdown("""
-    <div class="box-green">
-        <b>Hasil Audit Resolver Otoritatif IDADX:</b><br><br>
-        1. <b>Kualitas Layanan Prima:</b> Rasio kueri terhadap respons bernilai 1.000 : 0.997 membuktikan tidak adanya hambatan antrean transaksi atau <i>packet drop</i> massal. Keberhasilan NOERROR mencapai 88.05% dengan tingkat kegagalan server SERVFAIL hanya 0.0003% (3 kasus).<br><br>
-        2. <b>Modernisasi Protokol Berhasil:</b> Mayoritas trafik telah dihantarkan via IPv6 (70.7%) dan didukung oleh ekstensi EDNS0 (96.0%) serta validasi kriptografis DNSSEC DO-bit (86.4%).<br><br>
-        3. <b>Anomali & Ancaman Terpetakan:</b> Sebanyak 46.4% kueri terpapar pemindaian <i>mixed-case 0x20</i> dan ditemukan pembajakan subdomain resmi instansi pemerintah (.go.id) serta kampus (.ac.id) untuk promosi judi online.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("#### 🎯 5 Rekomendasi Strategis dan Aksi Nyata (Actionable Insights)")
-    
-    recomms = [
-        {"Kode": "R1", "Area": "Pengendalian Scanner", "Uraian": "Terapkan Response Rate Limiting (RRL) terhadap IP pengirim kueri mixed-case berturut-turut (>40 kueri/detik) untuk melindungi cache memory resolver."},
-        {"Kode": "R2", "Area": "Early Warning System", "Uraian": "Tetapkan ambang dinamis lonjakan NXDOMAIN: jika rasio melebihi 15% dalam rentang 5 menit pada zona SLD, picu peringatan dini potensi DGA."},
-        {"Kode": "R3", "Area": "Sanitasi Sektor Sekolah", "Uraian": "Inisiasi program audit bersama Kementerian Komdigi & Kemendikbudristek untuk memverifikasi situs .sch.id mati demi mencegah subdomain takeover."},
-        {"Kode": "R4", "Area": "Mitigasi Judi Online", "Uraian": "Aktifkan DNS Response Policy Zone (RPZ) sinkholing otomatis di tingkat resolver nasional terhadap subdomain publik yang disusupi judi online."},
-        {"Kode": "R5", "Area": "Optimalisasi Buffer EDNS", "Uraian": "Tetapkan advertised buffer UDP minimum sebesar 1.232 byte (standar DNS Flag Day) untuk meminimalkan beban pergantian protokol ke TCP (tc=1)."}
-    ]
-    st.dataframe(pd.DataFrame(recomms), use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.markdown("#### 🎤 Panduan Presentasi 5 Menit (Live Demo Talking Points)")
-    st.markdown("""
-    1. **Menit 1 (Pembuka & QoS):** Tunjukkan Tab 1 — *Highlight rasio 1.000 : 0.997 dan SERVFAIL 0.0003% (hanya 3 insiden dari 1 juta respons) yang membuktikan keandalan ekstrem IDADX.*
-    2. **Menit 2 (Throughput & Kesiapan):** Tunjukkan Tab 2 — *Throughput stabil 2.902 QPS (peak ~3.7k), dominasi IPv6 (70.7%) dan DNSSEC (86.4%).*
-    3. **Menit 3 (Anomali Keamanan):** Tunjukkan Tab 3 — *Temuan 46.4% mixed-case 0x20 probe dan pembajakan subdomain pemerintah (.go.id) serta kampus (.ac.id) untuk judi online.*
-    4. **Menit 4 (Simulator Interaktif):** Tunjukkan Tab 5 — *Lakukan uji coba live satu domain (misal `slot-gacor.dprdpasuruankab.go.id`) dan tunjukkan skor risiko 95/100.*
-    5. **Menit 5 (Rekomendasi R1-R5):** Tunjukkan Tab 6 — *Paparkan 5 aksi terukur R1–R5 (RRL, NXDOMAIN alert, RPZ sinkholing, sanitasi .sch.id, buffer 1.232B).*
-    """)
+            st.markdown("""
+            <div class="callout-box callout-green" style="margin-top:10px;">
+                <b>🟢 Domain Aman & Wajar:</b> Profil string leksikal dan reputasi domain berada pada batas normal standar RFC 1035. Tidak ditemukan indikasi bahaya.
+            </div>
+            """, unsafe_allow_html=True)
 
 # ============================================================
-# 9. FOOTER
+# 8. FOOTER
 # ============================================================
 st.markdown("---")
 st.markdown(f"""
-<div style="text-align:center; color:#64748b; font-size:0.82rem; padding:8px;">
-    <b>DNS Analytics Dashboard</b> | Tim: <b>datascape</b> | PeDaS 2026 Final<br>
-    Analisis log otoritatif IDADX berbasis standar RFC 1035 & RFC 6891 • Dievaluasi pada {len(df):,} sampel data riil
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; color:#64748b; font-size:0.8rem; padding:4px 0;">
+    <div>
+        <b>DNS Analytics Dashboard</b> • Tim: <b>datascape</b> • PeDaS 2026 Final
+    </div>
+    <div>
+        Kepatuhan Protokol RFC 1035 & RFC 6891 • IDADX .id Registry Telemetry Log
+    </div>
 </div>
 """, unsafe_allow_html=True)
