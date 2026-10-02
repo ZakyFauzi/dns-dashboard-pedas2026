@@ -32,12 +32,19 @@ CDN_WHITELIST = (
     'windows.net', 'msedge.net', 'akadns.net'
 )
 
-# Indikator pemalsuan identitas brand perbankan / e-wallet nasional
-BANKING_BRANDS = ('bca', 'mandiri', 'bri', 'bni', 'cimb', 'dana', 'gopay', 'ovo', 'linkaja', 'shopeepay')
+# Pola token terisolasi untuk brand perbankan/finansial (mencegah false positive pada 'danabos' atau 'danadesa')
+BANKING_REGEX = re.compile(
+    r'(?:^|[\.-])(bca|klikbca|mandiri|bri|bni|cimb|gopay|ovo|linkaja|shopeepay|dana)(?:[\.-]|$)',
+    re.IGNORECASE
+)
+
 LEGIT_BANKING_DOMAINS = (
     'bca.co.id', 'bankmandiri.co.id', 'bri.co.id', 'bni.co.id', 
     'cimbniaga.co.id', 'gopay.co.id', 'dana.id', 'klikbca.com'
 )
+
+# Pola deteksi label tunggal sangat panjang (>= 48 karakter) mendekati batas RFC 1035 (63 oktet)
+LABEL_48_REGEX = re.compile(r'(?:^|\.)[^.]{48,}(?:\.|$)')
 
 # ============================================================
 # 2. KLASIFIKASI SEKTOR SLD (SECOND-LEVEL DOMAIN)
@@ -133,7 +140,6 @@ def analyze_dga_signals(label: str) -> Tuple[float, int]:
     vowels = sum(1 for c in chars if c in 'aeiou')
     vowel_ratio = vowels / len(chars)
     
-    # Mencari panjang konsonan terpanjang tanpa diselingi vokal/angka/titik
     consonant_matches = re.findall(r'[^aeiou0-9\.\-_]+', label.lower())
     max_consonants = max((len(m) for m in consonant_matches), default=0)
     return vowel_ratio, max_consonants
@@ -188,10 +194,11 @@ def calculate_domain_risk(domain_str: str) -> Dict[str, Any]:
         reasons.append("⚠️ Mengandung kata kunci perjudian daring terlarang (slot/togel/casino/gacor).")
         mitigation.append("Blokir resolusi kueri pada DNS Resolver Otoritatif / Trust Positif.")
         
-    # 3. Pengecekan Phishing Brand Perbankan / E-Wallet
-    has_bank = any(brand in dom for brand in BANKING_BRANDS)
+    # 3. Pengecekan Phishing Brand Perbankan / E-Wallet (Mencegah false positive pada instansi publik/dana bantuan)
+    has_bank = bool(BANKING_REGEX.search(dom))
     is_legit_bank = any(dom.endswith(legit) for legit in LEGIT_BANKING_DOMAINS)
-    if has_bank and not is_legit_bank:
+    
+    if has_bank and not is_legit_bank and not is_public:
         score += 65
         reasons.append("⚠️ Pemalsuan identitas brand finansial / perbankan nasional (Indikasi Kuat Phishing Kredensial).")
         mitigation.append("Laporkan ke CSIRT Finansial dan registrar domain terkait untuk takedown segera.")
@@ -254,20 +261,23 @@ def calculate_domain_risk(domain_str: str) -> Dict[str, Any]:
     }
 
 # ============================================================
-# 5. DETEKSI DNS TUNNELING / EXFILTRATION
+# 5. DETEKSI DNS TUNNELING / EXFILTRATION (RFC 1035 ALIGNED)
 # ============================================================
 def detect_dns_tunneling(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Mendeteksi kandidat kueri DNS Tunneling atau eksfiltrasi data.
-    Kriteria:
+    Mendeteksi kandidat kueri DNS Tunneling atau eksfiltrasi data payload:
     - Kueri TXT dengan panjang payload dns_len > 300 byte (mendekati batas EDNS)
-    - Atau label subdomain panjang >= 45 karakter dengan entropi leksikal tinggi.
+    - Atau label tunggal >= 48 karakter (mendekati batas maksimal RFC 1035: 63 oktet)
+    - Atau total FQDN > 90 karakter dengan muatan string acak.
     """
-    if 'qtype_name' not in df.columns or 'dns_len' not in df.columns:
+    if 'qtype_name' not in df.columns or 'dns_len' not in df.columns or 'qname_raw' not in df.columns:
         return pd.DataFrame()
         
     cond_txt_large = (df['qtype_name'] == 'TXT') & (df['dns_len'] > 300)
-    cond_long_label = df['qname_raw'].astype(str).str.len() > 60
     
-    suspicious = df[cond_txt_large | cond_long_label].copy()
+    s_raw = df['qname_raw'].astype(str)
+    cond_long_label = s_raw.str.contains(LABEL_48_REGEX, regex=True, na=False)
+    cond_fqdn_extreme = s_raw.str.len() > 90
+    
+    suspicious = df[cond_txt_large | cond_long_label | cond_fqdn_extreme].copy()
     return suspicious
